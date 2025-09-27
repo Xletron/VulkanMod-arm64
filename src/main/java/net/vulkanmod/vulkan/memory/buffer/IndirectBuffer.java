@@ -1,8 +1,10 @@
-package net.vulkanmod.vulkan.memory;
+package net.vulkanmod.vulkan.memory.buffer;
 
 import net.vulkanmod.vulkan.Synchronization;
 import net.vulkanmod.vulkan.Vulkan;
 import net.vulkanmod.vulkan.device.DeviceManager;
+import net.vulkanmod.vulkan.memory.MemoryManager;
+import net.vulkanmod.vulkan.memory.MemoryType;
 import net.vulkanmod.vulkan.queue.CommandPool;
 import net.vulkanmod.vulkan.queue.TransferQueue;
 
@@ -22,11 +24,12 @@ public class IndirectBuffer extends Buffer {
         int size = byteBuffer.remaining();
 
         if (size > this.bufferSize - this.usedBytes) {
-            resizeBuffer();
+            resizeBuffer((long) (this.bufferSize * 1.5f));
+            this.usedBytes = 0;
         }
 
         if (this.type.mappable()) {
-            this.type.copyToBuffer(this, size, byteBuffer);
+            this.type.copyToBuffer(this, byteBuffer, size, 0, this.usedBytes);
         } else {
             if (commandBuffer == null)
                 commandBuffer = DeviceManager.getTransferQueue().beginCommands();
@@ -39,13 +42,6 @@ public class IndirectBuffer extends Buffer {
 
         offset = usedBytes;
         usedBytes += size;
-    }
-
-    private void resizeBuffer() {
-        MemoryManager.getInstance().addToFreeable(this);
-        long newSize = this.bufferSize + (this.bufferSize >> 1);
-        this.createBuffer(newSize);
-        this.usedBytes = 0;
     }
 
     public void submitUploads() {

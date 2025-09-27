@@ -1,7 +1,6 @@
 package net.vulkanmod.render.chunk;
 
 import com.google.common.collect.Sets;
-import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.SheetedDecalTextureGenerator;
 import com.mojang.blaze3d.vertex.VertexConsumer;
@@ -35,9 +34,9 @@ import net.vulkanmod.render.profiling.Profiler;
 import net.vulkanmod.render.vertex.TerrainRenderType;
 import net.vulkanmod.vulkan.Renderer;
 import net.vulkanmod.vulkan.VRenderSystem;
-import net.vulkanmod.vulkan.memory.Buffer;
-import net.vulkanmod.vulkan.memory.IndexBuffer;
-import net.vulkanmod.vulkan.memory.IndirectBuffer;
+import net.vulkanmod.vulkan.memory.buffer.Buffer;
+import net.vulkanmod.vulkan.memory.buffer.IndexBuffer;
+import net.vulkanmod.vulkan.memory.buffer.IndirectBuffer;
 import net.vulkanmod.vulkan.memory.MemoryTypes;
 import net.vulkanmod.vulkan.shader.GraphicsPipeline;
 import net.vulkanmod.vulkan.texture.VTextureSelector;
@@ -225,14 +224,12 @@ public class WorldRenderer {
 
     public void allChanged() {
         if (this.level != null) {
-//            this.graphicsChanged();
             this.level.clearTintCaches();
 
             this.renderRegionCache.clear();
-            this.taskDispatcher.createThreads();
+            this.taskDispatcher.createThreads(Initializer.CONFIG.builderThreads);
 
             this.graphNeedsUpdate = true;
-//            this.generateClouds = true;
 
             this.renderDistance = this.minecraft.options.getEffectiveRenderDistance();
             if (this.sectionGrid != null) {
@@ -313,7 +310,7 @@ public class WorldRenderer {
         VTextureSelector.bindShaderTextures(pipeline);
 
         IndexBuffer indexBuffer = Renderer.getDrawer().getQuadsIndexBuffer().getIndexBuffer();
-        Renderer.getDrawer().bindIndexBuffer(Renderer.getCommandBuffer(), indexBuffer);
+        Renderer.getDrawer().bindIndexBuffer(Renderer.getCommandBuffer(), indexBuffer, indexBuffer.indexType.value);
 
         int currentFrame = Renderer.getCurrentFrame();
         Set<TerrainRenderType> allowedRenderTypes = Initializer.CONFIG.uniqueOpaqueLayer ? TerrainRenderType.COMPACT_RENDER_TYPES : TerrainRenderType.SEMI_COMPACT_RENDER_TYPES;
@@ -352,8 +349,6 @@ public class WorldRenderer {
 
         this.minecraft.getProfiler().pop();
         renderType.clearRenderState();
-
-        VRenderSystem.applyMVP(RenderSystem.getModelViewMatrix(), RenderSystem.getProjectionMatrix());
     }
 
     private void sortTranslucentSections(double camX, double camY, double camZ) {

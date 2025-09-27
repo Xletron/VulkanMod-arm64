@@ -1,15 +1,22 @@
 package net.vulkanmod.mixin.compatibility;
 
+import com.mojang.blaze3d.shaders.Shader;
 import com.mojang.blaze3d.shaders.Uniform;
-import com.mojang.blaze3d.systems.RenderSystem;
+import net.vulkanmod.gl.VkGlProgram;
+import net.vulkanmod.vulkan.Renderer;
+import net.vulkanmod.vulkan.shader.Pipeline;
+import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Overwrite;
+import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(Uniform.class)
 public class UniformM {
+
+    @Shadow @Final private Shader parent;
 
     /**
      * @author
@@ -31,8 +38,23 @@ public class UniformM {
     }
 
     @Inject(method = "upload", at = @At("HEAD"), cancellable = true)
-    public void cancelUpload(CallbackInfo ci) {
+    public void redirectUpload(CallbackInfo ci) {
+        Renderer renderer = Renderer.getInstance();
+        Pipeline boundPipeline = renderer.getBoundPipeline();
+
         ci.cancel();
+
+        VkGlProgram program = VkGlProgram.getBoundProgram();
+
+        if (program == null) {
+            return;
+        }
+
+        // Update descriptors only if the pipeline has already been bound
+        Pipeline pipeline = program.getPipeline();
+        if (boundPipeline == pipeline) {
+            renderer.uploadAndBindUBOs(boundPipeline);
+        }
     }
 
     @Inject(method = "uploadInteger", at = @At("HEAD"), cancellable = true)

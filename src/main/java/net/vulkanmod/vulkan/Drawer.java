@@ -2,6 +2,11 @@ package net.vulkanmod.vulkan;
 
 import com.mojang.blaze3d.vertex.VertexFormat;
 import net.vulkanmod.vulkan.memory.*;
+import net.vulkanmod.vulkan.memory.buffer.Buffer;
+import net.vulkanmod.vulkan.memory.buffer.IndexBuffer;
+import net.vulkanmod.vulkan.memory.buffer.UniformBuffer;
+import net.vulkanmod.vulkan.memory.buffer.VertexBuffer;
+import net.vulkanmod.vulkan.memory.buffer.index.AutoIndexBuffer;
 import net.vulkanmod.vulkan.util.VUtil;
 import org.lwjgl.system.MemoryUtil;
 import org.lwjgl.vulkan.VkCommandBuffer;
@@ -39,7 +44,7 @@ public class Drawer {
 
     public Drawer() {
         // Index buffers
-        this.quadsIndexBuffer = new AutoIndexBuffer(AutoIndexBuffer.QUAD_U16_MAX_VERTEX_COUNT, AutoIndexBuffer.DrawType.QUADS);
+        this.quadsIndexBuffer = new AutoIndexBuffer(AutoIndexBuffer.U16_MAX_VERTEX_COUNT, AutoIndexBuffer.DrawType.QUADS);
         this.quadsIntIndexBuffer = new AutoIndexBuffer(100000, AutoIndexBuffer.DrawType.QUADS);
         this.linesIndexBuffer = new AutoIndexBuffer(10000, AutoIndexBuffer.DrawType.LINES);
         this.debugLineStripIndexBuffer = new AutoIndexBuffer(10000, AutoIndexBuffer.DrawType.DEBUG_LINE_STRIP);
@@ -91,11 +96,12 @@ public class Drawer {
 
     public void draw(ByteBuffer vertexData, ByteBuffer indexData, VertexFormat.Mode mode, VertexFormat vertexFormat, int vertexCount) {
         VertexBuffer vertexBuffer = this.vertexBuffers[this.currentFrame];
-        vertexBuffer.copyToVertexBuffer(vertexFormat.getVertexSize(), vertexCount, vertexData);
+        int size = vertexFormat.getVertexSize() * vertexCount;
+        vertexBuffer.copyBuffer(vertexData, size);
 
         if (indexData != null) {
             IndexBuffer indexBuffer = this.indexBuffers[this.currentFrame];
-            indexBuffer.copyBuffer(indexData);
+            indexBuffer.copyBuffer(indexData, indexData.remaining());
 
             int indexCount = vertexCount * 3 / 2;
 
@@ -106,6 +112,7 @@ public class Drawer {
 
             if (autoIndexBuffer != null) {
                 int indexCount = autoIndexBuffer.getIndexCount(vertexCount);
+                autoIndexBuffer.checkCapacity(indexCount);
 
                 drawIndexed(vertexBuffer, autoIndexBuffer.getIndexBuffer(), indexCount);
             }
@@ -115,14 +122,18 @@ public class Drawer {
         }
     }
 
-    public void drawIndexed(VertexBuffer vertexBuffer, IndexBuffer indexBuffer, int indexCount) {
+    public void drawIndexed(Buffer vertexBuffer, IndexBuffer indexBuffer, int indexCount) {
+       drawIndexed(vertexBuffer, indexBuffer, indexCount, indexBuffer.indexType.value);
+    }
+
+    public void drawIndexed(Buffer vertexBuffer, Buffer indexBuffer, int indexCount, int indexType) {
         VkCommandBuffer commandBuffer = Renderer.getCommandBuffer();
 
         VUtil.UNSAFE.putLong(pBuffers, vertexBuffer.getId());
         VUtil.UNSAFE.putLong(pOffsets, vertexBuffer.getOffset());
         nvkCmdBindVertexBuffers(commandBuffer, 0, 1, pBuffers, pOffsets);
 
-        bindIndexBuffer(commandBuffer, indexBuffer);
+        bindIndexBuffer(commandBuffer, indexBuffer, indexType);
         vkCmdDrawIndexed(commandBuffer, indexCount, 1, 0, 0, 0);
     }
 
@@ -136,8 +147,8 @@ public class Drawer {
         vkCmdDraw(commandBuffer, vertexCount, 1, 0, 0);
     }
 
-    public void bindIndexBuffer(VkCommandBuffer commandBuffer, IndexBuffer indexBuffer) {
-        vkCmdBindIndexBuffer(commandBuffer, indexBuffer.getId(), indexBuffer.getOffset(), indexBuffer.indexType.type);
+    public void bindIndexBuffer(VkCommandBuffer commandBuffer, Buffer indexBuffer, int indexType) {
+        vkCmdBindIndexBuffer(commandBuffer, indexBuffer.getId(), indexBuffer.getOffset(), indexType);
     }
 
     public void cleanUpResources() {
@@ -185,12 +196,12 @@ public class Drawer {
         return this.uniformBuffers[this.currentFrame];
     }
 
-    private AutoIndexBuffer getAutoIndexBuffer(VertexFormat.Mode mode, int vertexCount) {
+    public AutoIndexBuffer getAutoIndexBuffer(VertexFormat.Mode mode, int vertexCount) {
         return switch (mode) {
             case QUADS -> {
                 int indexCount = vertexCount * 3 / 2;
 
-                yield indexCount > AutoIndexBuffer.U16_MAX_INDEX_COUNT
+                yield indexCount > AutoIndexBuffer.U16_MAX_VERTEX_COUNT
                         ? this.quadsIntIndexBuffer : this.quadsIndexBuffer;
             }
             case LINES -> this.linesIndexBuffer;

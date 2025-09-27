@@ -1,6 +1,6 @@
 package net.vulkanmod.vulkan.util;
 
-import net.vulkanmod.vulkan.memory.Buffer;
+import net.vulkanmod.vulkan.memory.buffer.Buffer;
 import org.lwjgl.PointerBuffer;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.system.MemoryUtil;
@@ -72,6 +72,18 @@ public class VUtil {
         final long srcPtr = src.getDataPtr();
         final long dstPtr = MemoryUtil.memAddress(dst);
 
+        MemoryUtil.memCopy(srcPtr, dstPtr, size);
+    }
+
+    public static void memcpy(ByteBuffer src, Buffer dst, long size, long srcOffset, long dstOffset) {
+        if (CHECKS) {
+            if (size > dst.getBufferSize() - dstOffset) {
+                throw new IllegalArgumentException("Upload size is greater than available dst buffer size");
+            }
+        }
+
+        final long dstPtr = dst.getDataPtr() + dstOffset;
+        final long srcPtr = MemoryUtil.memAddress(src) + srcOffset;
         MemoryUtil.memCopy(srcPtr, dstPtr, size);
     }
 
